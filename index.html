@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rockstar</title>
+<style>
+:root{--bg:#fff7ec;--fg:#2a1a3a;--card:#ffffff;--pit:#f1dcc0;--p1:#d6336c;--p2:#1c7ed6;--cube:#f59f00;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#18122b;--fg:#f3eaff;--card:#251c40;--pit:#3a2d5e;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#18122b;--fg:#f3eaff;--card:#251c40;--pit:#3a2d5e;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;padding:16px;max-width:760px;margin:0 auto;text-align:center}
+h1{margin:4px 0;font-size:2rem;letter-spacing:2px}
+.names{display:flex;gap:8px;justify-content:center;margin:8px 0}
+.names input{width:44%;padding:8px;border-radius:8px;border:2px solid var(--pit);background:var(--card);color:var(--fg);font-size:1rem;text-align:center}
+#msg{font-weight:bold;min-height:28px;margin:8px 0}
+#board{display:grid;grid-template-columns:1.1fr repeat(6,1fr) 1.1fr;grid-template-rows:1fr 1fr;gap:6px;background:var(--card);padding:8px;border-radius:16px}
+.pit,.store{background:var(--pit);border-radius:12px;border:3px solid transparent;color:var(--fg);padding:4px;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:2px;min-height:90px;position:relative}
+.pit{cursor:pointer;font:inherit}
+.pit:disabled{cursor:default;opacity:.85}
+.pit.on{border-color:currentColor;animation:pulse 1.2s infinite}
+.pit.t0.on{color:var(--p1)}.pit.t1.on{color:var(--p2)}
+@keyframes pulse{50%{transform:scale(1.04)}}
+.store{grid-row:1/3;min-height:190px}
+.s0{grid-column:8;border-color:var(--p1)}.s1{grid-column:1;border-color:var(--p2)}
+.n{position:absolute;top:2px;left:6px;font-size:.8rem;font-weight:bold;color:var(--fg)}
+.cu{width:12px;height:12px;background:var(--cube);border-radius:2px;box-shadow:inset -2px -2px 0 rgba(0,0,0,.25)}
+.lbl{display:flex;justify-content:space-between;font-size:.85rem;margin:6px 4px}
+button.r{margin-top:14px;padding:10px 22px;font-size:1rem;border:0;border-radius:10px;background:var(--p1);color:#fff;cursor:pointer}
+details{margin-top:16px;text-align:left;background:var(--card);padding:10px 14px;border-radius:10px}
+.pit.sel{outline:3px solid var(--cube)}#dir button.r{margin:4px;padding:8px 14px}
+</style>
+</head>
+<body>
+<h1>🎸 ROCKSTAR</h1>
+<div><button class="r" onclick="setMode(false)">👥 2 Players</button> <button class="r" onclick="setMode(true)">🤖 vs Computer</button></div>
+<div class="names">
+<input id="n0" value="Player 1" aria-label="Player 1 name" oninput="draw()">
+<input id="n1" value="Player 2" aria-label="Player 2 name" oninput="draw()">
+</div>
+<div id="msg"></div>
+<div id="dir"></div>
+<div class="lbl"><span id="l1" style="color:var(--p2)"></span><span id="l0" style="color:var(--p1)"></span></div>
+<div id="board"></div>
+<button class="r" onclick="start()">New game</button>
+<details>
+<summary><b>How to play</b></summary>
+<p>Each small box starts with 6 cubes. The two big end boxes start empty and are the players’ stores. On your turn, pick any box with cubes (the highlighted ones), lift all its cubes and drop them one by one in the following boxes, in the direction you choose (anticlockwise or clockwise) and including your own store (skip your opponent’s store).</p>
+<p>If your last cube lands in a box that already has cubes, lift all of them and keep dropping. When your last cube lands in an empty box or in your store, your turn ends and your opponent plays. When all boxes are empty, count the stores: most cubes wins!</p>
+</details>
+<script>
+var b,turn,over,sel=null,cpu=false,busy=false,net=null,role=-1;
+function start(){b=[6,6,6,6,6,6,0,6,6,6,6,6,6,0];turn=0;over=false;sel=null;busy=false;draw();sync()}
+function nm(i){if(role>=0)return i===role?'You':'Friend';return document.getElementById('n'+i).value||('Player '+(i+1))}
+function cubes(i){var s='<span class="n">'+b[i]+'</span>';for(var k=0;k<b[i];k++)s+='<span class="cu"></span>';return s}
+function draw(){
+var h='<div class="store s1">'+cubes(13)+'</div>';
+var order=[12,11,10,9,8,7,0,1,2,3,4,5];
+for(var j=0;j<12;j++){var i=order[j],t=turn,ok=!over&&!busy&&b[i]>0&&mine();
+h+='<button class="pit t'+t+(ok?' on':'')+(sel===i?' sel':'')+'" '+(ok?'':'disabled ')+'onclick="pick('+i+')" aria-label="Box with '+b[i]+' cubes">'+cubes(i)+'</button>'}
+h+='<div class="store s0">'+cubes(6)+'</div>';
+document.getElementById('board').innerHTML=h;
+document.getElementById('l0').textContent=nm(0)+': '+b[6];
+document.getElementById('l1').textContent=nm(1)+': '+b[13];
+var m=document.getElementById('msg');
+if(over){var a=b[6],c=b[13];m.textContent=a===c?'It’s a draw '+a+' – '+c+'!':'🏆 '+nm(a>c?0:1)+(nm(a>c?0:1)==='You'?' win':' wins')+' with '+Math.max(a,c)+' cubes!'}
+else m.textContent='🎲 '+(role>=0&&turn===role?'Your turn':nm(turn)+'’s turn')+': '+(sel===null?(mine()?'pick any box':'waiting…'):'choose the direction');
+document.getElementById('dir').innerHTML=(sel!==null&&!over)?'<button class="r" onclick="play(sel,1)">↺ Anticlockwise</button> <button class="r" onclick="play(sel,-1)">↻ Clockwise</button>':''}
+function sim(bd,tr,i,dir){bd=bd.slice();var own=tr?13:6,opp=tr?6:13,p=i;
+while(true){var n=bd[p];bd[p]=0;
+while(n){p=(p+dir+14)%14;if(p===opp)continue;bd[p]++;n--}
+if(p===own||bd[p]===1)break}
+return bd}
+function pick(i){if(!over&&!busy&&b[i]>0&&mine()){sel=i;draw()}}
+function play(i,dir){
+if(over||!b[i])return;b=sim(b,turn,i,dir);sel=null;
+var tot=0;for(var k=0;k<14;k++)if(k!==6&&k!==13)tot+=b[k];
+if(!tot)over=true;else turn=1-turn;
+sync();
+if(cpu&&turn===1&&!over){busy=true;draw();setTimeout(cpuMove,900)}else draw()}
+function cpuMove(){var best=-1,opts=[];
+for(var i=0;i<13;i++){if(i===6||!b[i])continue;[1,-1].forEach(function(d){var g=sim(b,1,i,d)[13]-b[13];if(g>best){best=g;opts=[]}if(g===best)opts.push([i,d])})}
+var m=opts[Math.floor(Math.random()*opts.length)];busy=false;play(m[0],m[1])}
+function setMode(c){if(net){net.leave();net=null}role=-1;cpu=c;document.getElementById('n1').value=c?'Computer':'Player 2';start()}
+function mine(){return role<0||(!!net&&turn===role)}
+function sync(){if(net)net.emit('state',{b:b,turn:turn,over:over}).catch(function(){})}
+function showOnline(){document.getElementById('online').style.display='block';document.getElementById('ostat').textContent='Pick a code. One player taps Create, the friend types the same code and taps Join.'}
+async function goOnline(r){
+var st=document.getElementById('ostat'),code=(document.getElementById('code').value||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+if(code.length<3){st.textContent='Type a game code (3 to 8 letters or numbers) that you and your friend both use.';return}
+var room=null;try{if(typeof claude!=='undefined')room=await claude.use('room')}catch(e){}
+if(!room){st.textContent='Online play is not available in this view. Open the shared link while signed in to Claude.';return}
+if(net){try{net.leave()}catch(e){}net=null}
+var g;try{g=await room.join('rock-'+code)}catch(e){st.textContent='Could not join the game. Please try again.';return}
+net=g;role=r;cpu=false;
+g.on('state',function(m){if(m.isMe)return;var d=m.data;if(!d||!Array.isArray(d.b)||d.b.length!==14)return;b=d.b.map(Number);turn=d.turn?1:0;over=!!d.over;sel=null;busy=false;draw()});
+g.on('hello',function(m){if(!m.isMe&&role===0)sync()});
+g.onPeers(function(){var n=g.peers().length;st.textContent=n>1?'🟢 Friend connected. Game '+code+(role===0?' (you are Player 1)':' (you are Player 2)'):'⏳ Waiting for your friend to join game '+code+'…';if(role===0&&n>1)sync()});
+if(r===0)start();else{g.emit('hello',{}).catch(function(){});draw()}}
+start();
+</script>
+</body>
+</html>
